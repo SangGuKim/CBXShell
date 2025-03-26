@@ -1,3 +1,5 @@
+#include <wincodec.h>
+#pragma comment(lib, "windowscodecs.lib")
 ///////////////////////////////////////////////
 // v4.6
 //////////////////////////////////////////////
@@ -25,6 +27,8 @@
 // WTL headers
 #include <atlgdi.h>
 
+#include <sys/stat.h>
+
 #include "unrar.h"
 #ifdef _WIN64
 #pragma comment(lib,"unrar64.lib")
@@ -43,8 +47,8 @@
 
 #define CBX_APP_KEY _T("Software\\T800 Productions\\{9E6ECB90-5A61-42BD-B851-D3297D9C7F39}")
 
-
 namespace __cbx {
+
 
 // unused
 //template <class T> class CBuffer
@@ -318,6 +322,46 @@ public:
 	return NOERROR;
 	}
 
+	HRESULT WICCreateHBITMAPFromBitmap(
+		IWICImagingFactory* pFactory,
+		IWICBitmapSource* pBitmapSource,
+		HBITMAP* phBitmapOut)
+	{
+		*phBitmapOut = NULL;
+		HRESULT hr = S_OK;
+
+		UINT width = 0, height = 0;
+		hr = pBitmapSource->GetSize(&width, &height);
+		if (FAILED(hr)) return hr;
+
+		BITMAPINFO bminfo = { 0 };
+		bminfo.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+		bminfo.bmiHeader.biWidth = width;
+		bminfo.bmiHeader.biHeight = -(LONG)height; // top-down
+		bminfo.bmiHeader.biPlanes = 1;
+		bminfo.bmiHeader.biBitCount = 32;
+		bminfo.bmiHeader.biCompression = BI_RGB;
+
+		void* pvImageBits = nullptr;
+		HDC hdc = GetDC(NULL);
+		HBITMAP hBitmap = CreateDIBSection(hdc, &bminfo, DIB_RGB_COLORS, &pvImageBits, NULL, 0);
+		ReleaseDC(NULL, hdc);
+
+		if (!hBitmap || !pvImageBits) return E_FAIL;
+
+		const UINT cbStride = width * 4;
+		const UINT cbBufferSize = cbStride * height;
+
+		hr = pBitmapSource->CopyPixels(NULL, cbStride, cbBufferSize, (BYTE*)pvImageBits);
+		if (FAILED(hr)) {
+			DeleteObject(hBitmap);
+			return hr;
+		}
+
+		*phBitmapOut = hBitmap;
+		return S_OK;
+	}
+
 	////////////////////////////////////
 	//IExtractImage::Extract(HBITMAP* phBmpThumbnail)
 	HRESULT OnExtract(HBITMAP* phBmpThumbnail)
@@ -541,7 +585,7 @@ private:
 private:
 	inline BOOL GetFileSizeCrt(LPCTSTR pszFile, __int64 &fsize)
 	{
-		_stat64 _s;
+		struct _stat64 _s;
 		_s.st_size=0;
 		if (0!=::_tstat64(pszFile, &_s)) return FALSE;
 		fsize=_s.st_size;
@@ -563,7 +607,10 @@ private:
 		if (StrEqual(_e, _T(".png")))  return TRUE;
 		if (StrEqual(_e, _T(".tif")))  return TRUE;
 		if (StrEqual(_e, _T(".tiff"))) return TRUE;
-	return FALSE;
+		if (StrEqual(_e, _T(".webp"))) return TRUE;
+		if (StrEqual(_e, _T(".avif"))) return TRUE;
+		if (StrEqual(_e, _T(".heic"))) return TRUE;
+		return FALSE;
 	}
 
 	inline CBXTYPE GetCBXType(LPCTSTR szExt)
@@ -625,45 +672,55 @@ private:
 	}
 
 
-	HBITMAP ThumbnailFromIStream(IStream* pIs, const LPSIZE pThumbSize)
+	HBITMAP ThumbnailFromIStream(IStream* pStream, const LPSIZE pThumbSize)
 	{
-		ATLASSERT(pIs);
-		CImage ci;//uses gdi+ internally
-		if (S_OK!=ci.Load(pIs)) return NULL;
+		CComPtr<IWICImagingFactory> pFactory;
+		CComPtr<IWICBitmapDecoder> pDecoder;
+		CComPtr<IWICBitmapFrameDecode> pFrame;
+		CComPtr<IWICFormatConverter> pConverter;
+		CComPtr<IWICBitmapScaler> pScaler;
 
-		//check size
-		int tw=ci.GetWidth();
-		int th=ci.GetHeight();
-		float rx=(float)pThumbSize->cx/(float)tw;
-		float ry=(float)pThumbSize->cy/(float)th;
+		HRESULT hr = CoCreateInstance(
+			CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
+			IID_PPV_ARGS(&pFactory));
+		if (FAILED(hr)) return NULL;
 
-		//if bigger size
-		if ((rx<1) || (ry<1))
-		{
-			CDC hdcNew=::CreateCompatibleDC(NULL);
-			if (hdcNew.IsNull()) return NULL;
+		hr = pFactory->CreateDecoderFromStream(
+			pStream, nullptr, WICDecodeMetadataCacheOnLoad, &pDecoder);
+		if (FAILED(hr)) return NULL;
 
-			hdcNew.SetStretchBltMode(HALFTONE);
-			hdcNew.SetBrushOrg(0,0, NULL);
-			//variables retain values until assignment
-			tw=(int)(min(rx,ry)*tw);//C424 warning workaround
-			th=(int)(min(rx,ry)*th);
+		hr = pDecoder->GetFrame(0, &pFrame);
+		if (FAILED(hr)) return NULL;
 
-			CBitmap hbmpNew;
-			hbmpNew.CreateCompatibleBitmap(ci.GetDC(), tw,th);
-			ci.ReleaseDC();//don't forget!
-			if (hbmpNew.IsNull()) return NULL;
+		UINT originalWidth = 0, originalHeight = 0;
+		pFrame->GetSize(&originalWidth, &originalHeight);
 
-			HBITMAP hbmpOld=hdcNew.SelectBitmap(hbmpNew);
-			hdcNew.FillSolidRect(0,0, tw,th, RGB(255,255,255));//white background
-			ci.Draw(hdcNew, 0,0, tw,th, 0,0, ci.GetWidth(),ci.GetHeight());//too late for error checks
-			hdcNew.SelectBitmap(hbmpOld);
+		float scaleX = (float)pThumbSize->cx / originalWidth;
+		float scaleY = (float)pThumbSize->cy / originalHeight;
+		float scale = min(scaleX, scaleY);
 
-		return hbmpNew.Detach();
-		}
+		UINT targetWidth = (UINT)(originalWidth * scale);
+		UINT targetHeight = (UINT)(originalHeight * scale);
 
-	return ci.Detach();
+		hr = pFactory->CreateBitmapScaler(&pScaler);
+		if (FAILED(hr)) return NULL;
+
+		hr = pScaler->Initialize(pFrame, targetWidth, targetHeight, WICBitmapInterpolationModeFant);
+		if (FAILED(hr)) return NULL;
+
+		hr = pFactory->CreateFormatConverter(&pConverter);
+		if (FAILED(hr)) return NULL;
+
+		hr = pConverter->Initialize(
+			pScaler, GUID_WICPixelFormat32bppBGRA,
+			WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeCustom);
+		if (FAILED(hr)) return NULL;
+
+		HBITMAP hBmp = NULL;
+		hr = WICCreateHBITMAPFromBitmap(pFactory, pConverter, &hBmp);
+		return SUCCEEDED(hr) ? hBmp : NULL;
 	}
+
 
 	////unused
 	//HBITMAP ThumbnailFromBuffer(LPCBYTE pBuf, const ULONG dwBufSize, const LPSIZE pThumbSize)

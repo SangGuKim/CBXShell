@@ -31,6 +31,11 @@
 	}
   };
 
+
+#define WINVER 0x0601         // Windows 7 이상
+#define _WIN32_WINNT 0x0601   // Windows 7 이상의 API 지원
+#define _WIN32_IE 0x0800      // IE 8.0 이상의 컴포넌트
+
 #include <atlapp.h>
 
 extern CAppModule _Module;

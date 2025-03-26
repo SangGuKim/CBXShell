@@ -12,6 +12,18 @@
 
 #define _ATL_APARTMENT_THREADED
 
+#ifndef WINVER
+#   define WINVER 0x0A00        // Windows 10 이상
+#endif
+
+#ifndef _WIN32_WINNT
+#   define _WIN32_WINNT 0x0A00  // Windows 10 이상의 API 지원
+#endif
+
+#ifndef _WIN32_IE
+#   define _WIN32_IE 0x0A00     // IE 10.0 이상의 컴포넌트
+#endif
+
 #include <atlbase.h>
 #include <atlapp.h>// WTL project
 
