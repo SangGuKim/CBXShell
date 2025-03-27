@@ -7,7 +7,17 @@
 #endif
 
 //runs on min win2k
-#define _WIN32_WINNT	_WIN32_WINNT_WIN2K
+#ifdef WINVER
+#   define WINVER 0x0A00        // Windows 10 이상
+#endif
+
+#ifndef _WIN32_WINNT
+#   define _WIN32_WINNT 0x0A00  // Windows 10 이상의 API 지원
+#endif
+
+#ifndef _WIN32_IE
+#   define _WIN32_IE 0x0A00     // IE 10.0 이상의 컴포넌트
+#endif
 
 
 //#define _WTL_SUPPORT_SDK_ATL3
@@ -32,9 +42,17 @@
   };
 
 
-#define WINVER 0x0601         // Windows 7 이상
-#define _WIN32_WINNT 0x0601   // Windows 7 이상의 API 지원
-#define _WIN32_IE 0x0800      // IE 8.0 이상의 컴포넌트
+#ifndef WINVER
+#   define WINVER 0x0A00        // Windows 10 이상
+#endif
+
+#ifndef _WIN32_WINNT
+#   define _WIN32_WINNT 0x0A00  // Windows 10 이상의 API 지원
+#endif
+
+#ifndef _WIN32_IE
+#   define _WIN32_IE 0x0A00     // IE 10.0 이상의 컴포넌트
+#endif
 
 #include <atlapp.h>
 

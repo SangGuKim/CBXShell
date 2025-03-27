@@ -12,7 +12,7 @@
 
 #define _ATL_APARTMENT_THREADED
 
-#ifndef WINVER
+#ifdef WINVER
 #   define WINVER 0x0A00        // Windows 10 ÀÌ»ף
 #endif
 

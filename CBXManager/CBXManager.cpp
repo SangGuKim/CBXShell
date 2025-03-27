@@ -30,6 +30,7 @@ return nRet;
 
 int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPTSTR lpstrCmdLine, int nCmdShow)
 {
+	SetProcessDPIAware();
 	// one manager instance per user
 	CHandle mtx(CreateMutex(NULL, FALSE, CBX_MGRMUTEX));
 	if (GetLastError()==ERROR_ALREADY_EXISTS)

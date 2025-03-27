@@ -20,3 +20,7 @@ This fork replaces GDI+ with **Windows Imaging Component (WIC)** to support mode
 - No setup installer — just overwrite the existing installation or use `regsvr32` manually
 - The Manager component is not currently supported or compiled
 - Created for personal use due to the lack of upstream updates
+- To compile, you need to install WTL, using vcpkg
+```
+vcpkg install wtl
+```
