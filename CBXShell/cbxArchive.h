@@ -610,6 +610,7 @@ private:
 		if (StrEqual(_e, _T(".webp"))) return TRUE;
 		if (StrEqual(_e, _T(".avif"))) return TRUE;
 		if (StrEqual(_e, _T(".heic"))) return TRUE;
+		if (StrEqual(_e, _T(".jxl")))  return TRUE;
 		return FALSE;
 	}
 
